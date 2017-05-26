@@ -5,14 +5,15 @@
 #define LISTEN_PORT  80           // The port to listen for incoming TCP connections
 aREST rest = aREST();             // Create aREST instance
 
+
 // EEPROM Map
-//  0   1   2...
-// 
+//
+// 0.   Modo: A=AP, W=WifiClient   
+// 1.   Lenght: Tamaño del String que contiene SSID y password, por defecto 255
+// 2-n  WifiData: String que contiene SSID y password.
 
-
-// WiFi parameters
-const char* ssidAp = "TEST3333";          // SSID a mostrar en modo AP
-const char* passwordAp = "pepsiman11";    // password para entrar a red en modo AP
+const char* ssidAp = "BoylerWifi";          // SSID a mostrar en modo AP
+const char* passwordAp = "pepsiman11";      // password para entrar a red en modo AP
 const char* ssid = "";
 const char* password = "";
 const int OUT = 5;
@@ -31,31 +32,27 @@ int ledControl(String command);
 void setup(void){
   Serial.begin(9600);
   EEPROM.begin(512);
-//  EEPROM.write(0,0);
+
+  // REST config
+  rest.variable("temperature",&temperature);
+  rest.variable("humidity",&humidity);
+  rest.function("read",readData);
+  rest.function("save",saveData);
+  rest.set_id("1");
+  rest.set_name("esp8266");
   
   pinMode(OUT, OUTPUT);
   digitalWrite(OUT, 1);
   delay(2000);
   digitalWrite(OUT, 0);
-  
-  // Init variables and expose them to REST API
-  temperature = 24;
-  humidity = 40;
-  rest.variable("temperature",&temperature);
-  rest.variable("humidity",&humidity);
-
-  // Function to be exposed
-  rest.function("save", saveData);
-  rest.function("read", readData);  
-
-  // Give name & ID to the device (ID should be 6 characters long)
-  rest.set_id("1");
-  rest.set_name("esp8266");
-
+ 
   Serial.println("Read wifi data from EEPROM...");
   delay(1000);
 
-  if(readWifiData().length() > 0){    // Existen datos, intentar conectarse a la red
+  if(EEPROM.read(1) != 255){          // Comprobar si existen datos Wifi
+    // Existen datos, intentar conectarse a la red 
+    
+    Serial.println("Wifi data found, try connection");   
     WiFi.begin(ssid, password);
     // Intentar conectar hasta agotar tiempo de espera
     while (WiFi.status() != WL_CONNECTED){
@@ -67,26 +64,22 @@ void setup(void){
       }
     }
     if(timeout == 150){
-      Serial.println("ERROR");  
+      Serial.println("ERROR"); 
+      Serial.println("Wifi connection error, create AP...");
+      delay(1000);
+      initApMode(); 
     }
-    else{
+    else{                             // Error de conexión, entrar en modo AP
       String ip = WiFi.localIP().toString();
       Serial.print(ip);
       if(ip.equals("0.0.0.0")){
-//        asm volatile ("  jmp 0"); 
-        Serial.println("Wifi connection error, create AP...");
+        Serial.println("Wifi connection error 2, create AP...");
         delay(1000);
-        
-        WiFi.mode(WIFI_AP);
-        WiFi.softAP(ssidAp, passwordAp);
-        Serial.println("WiFi AP created");
-     
-        server.begin();
-        Serial.println("Server started");
-      
-        IPAddress myIP = WiFi.softAPIP();
-        Serial.print("AP IP address: ");
-        Serial.println(myIP); 
+        initApMode();
+      }
+      else{                           // Conexión wifi exitosa
+        EEPROM.write(0, 'W');
+        Serial.println("Connection successfull to wifi network");
       }
     }
   }
@@ -94,33 +87,30 @@ void setup(void){
     Serial.println("No WifiData, create AP...");
     delay(1000);
     
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(ssidAp, passwordAp);
-    Serial.println("WiFi AP created");
- 
-    server.begin();
-    Serial.println("Server started");
-  
-    IPAddress myIP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(myIP);
+    initApMode();
   }
 
   
   
- 
+  Serial.print("MODE: "); Serial.println(char(EEPROM.read(0)));
 }
 
 void loop() {
-  // Handle REST calls
-  WiFiClient client = server.available();
-  if (!client) {
-    return;
+  if(char(EEPROM.read(0)) == 'A'){
+    // Handle REST calls
+    WiFiClient client = server.available();
+    if (!client) {
+      return;
+    }
+    while(!client.available()){
+      delay(1);
+    }
+    rest.handle(client);
   }
-  while(!client.available()){
-    delay(1);
+  else if(char(EEPROM.read(0)) == 'W'){
+    Serial.println("wifi mode");
   }
-  rest.handle(client);
+  
 }
 
 // ----------------------------------------
@@ -128,9 +118,10 @@ void loop() {
 //
 int saveData(String command) {
   writeWifiData(command);
+  Serial.println("New wifi data saved, restaring...");
+  delay(1000);
+  ESP.reset(); 
   return 1;
-  delay(3000);
-  asm volatile ("  jmp 0"); 
 }
 
 int readData(String command) {  
@@ -144,14 +135,14 @@ int readData(String command) {
  * */
 String readWifiData(){
   String data = "";
-  int dataSize = (int)EEPROM.read(0);      // Leer tamaño del String que contiene SSID & pass
-  if(dataSize > 0){
+  int dataSize = (int)EEPROM.read(1);      // Leer tamaño del String que contiene SSID & pass
+  if(dataSize != 255){
     Serial.println("Reading SSID and pass");
     Serial.print("Read size:");  Serial.println(dataSize);
-    for (int i = 0; i < dataSize; i++){
+    for (int i = 2; i < dataSize; i++){
       data += char(EEPROM.read(i));
     }
-    Serial.print("Data: "); Serial.println(data);
+    Serial.print("Wifi Data: "); Serial.println(data);
   }
   return data;
 }
@@ -161,11 +152,11 @@ String readWifiData(){
  * */
 void writeWifiData(String ssidAndPass){
   int len = ssidAndPass.length();
-  EEPROM.write(0, len);
+  EEPROM.write(1, len);
   Serial.print("Saved size:");  Serial.println(len);
   
   for (int i = 0; i < len; ++i){
-    EEPROM.write(i + 1, ssidAndPass[i]);    // Dirección 0 reservada para tamaño del String
+    EEPROM.write(i + 2, ssidAndPass[i]);    // Dirección 0 reservada para tamaño del String
     Serial.print("Wrote: ");
     Serial.println(ssidAndPass[i]);
   }
@@ -189,5 +180,19 @@ void splitWifiData(String ssidAndPass){
 }
 
 
+void initApMode(){
+  EEPROM.write(0, 'A');
+  delay(1000);
+  
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ssidAp, passwordAp);
+  Serial.println("WiFi AP created");
 
+  server.begin();
+  Serial.println("Server started");
+
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP); 
+}
 
