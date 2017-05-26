@@ -33,6 +33,10 @@ int humidity;
 void setup(void){
   Serial.begin(9600);
   EEPROM.begin(512);
+  
+//  EEPROM.write(1, 255);
+//  EEPROM.commit();
+  
   pinMode(OUT, OUTPUT);
 
   // REST config
@@ -71,6 +75,7 @@ void setup(void){
     // Intentar conectar a red WiFi hasta agotar tiempo de espera
     WiFi.mode(WIFI_STA);
     WiFi.begin(sSsid.c_str(), sPassword.c_str());
+    timeout = 0;
     while (WiFi.status() != WL_CONNECTED){
       delay(500);
       Serial.print(".");              // Caracter a imprimir mientras se realiza la conexión
@@ -95,6 +100,8 @@ void setup(void){
       else{                           // Conexión wifi exitosa
         EEPROM.write(0, 'W');
         EEPROM.commit();
+        server.begin();
+        Serial.println("Server started ");
         Serial.println("Connection successfull to wifi network :)");
       }
     }
@@ -144,16 +151,17 @@ int saveData(String command) {
     Serial.println(command[i]);
   }
   Serial.print("EEPROM 1: "); Serial.println((int)EEPROM.read(1));
-  Serial.println("New wifi data saved, restaring...");
+  Serial.println("New wifi data saved");
   return 1;
 }
 
 int readData(String command) {  
+  Serial.println("REST read called...");
   return 2;
 }
 
 int resetMcu(String command) {  
-  ESP.reset(); 
+  setup();
   return 2;
 }
 
