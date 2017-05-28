@@ -20,6 +20,9 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.ImageButton;
+import android.widget.ListView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -40,38 +43,75 @@ import java.util.List;
 
 import novellius.com.boylerwifi.R;
 import novellius.com.boylerwifi.adapter.WiFiNetwork;
+import novellius.com.boylerwifi.adapter.WiFiNetworkAdapter;
 
 public class DisplaySSIDActivity extends AppCompatActivity implements
-        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener,
+        View.OnClickListener{
 
 
     private static final String TAG = "****** DisplaySSIDAct ";
     private static final int REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS = 777;
-    private static final int REQUEST_ACCESS_WIFI_STATE = 4677;
-    private static final int REQUEST_CHECK_SETTINGS = 9986;
 
     private List<WiFiNetwork> networks = new ArrayList<WiFiNetwork>();
     private WifiManager wifiManager;
     private WiFiBroadcastReceiver wifiBroadcastReceiver;
-    LocationManager locationManager;
-    LocationRequest locationRequest;
-    LocationSettingsRequest locationSettingsRequest;
-    GoogleApiClient googleApiClient;
+    private LocationManager locationManager;
+    private LocationRequest locationRequest;
+    private LocationSettingsRequest locationSettingsRequest;
+    private GoogleApiClient googleApiClient;
+    private WiFiNetworkAdapter wiFiNetworkAdapter;
+
+    // Elementos de la UI
+    private ListView lstSsid;
+    private ImageButton imgRescan;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_display_ssid);
 
+        // Inicializar instancias
+        List<String> permissionsList = new ArrayList<String>();
+
+
+        // Inicializar elementos de la UI
+        lstSsid = (ListView) findViewById(R.id.lstSsid);
+        imgRescan = (ImageButton) findViewById(R.id.imgRescan);
+        imgRescan.setOnClickListener(this);
+
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "ACCESS_FINE_LOCATION");
+            permissionsList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.i(TAG, "ACCESS_COARSE_LOCATION");
+            permissionsList.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        }
+        Log.i(TAG, "size: " + permissionsList.size());
+        if (permissionsList.size() > 0) {
+            ActivityCompat.requestPermissions(this, permissionsList.toArray(new String[permissionsList.size()]),
+                    REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS);
+        }
+        else {
+            Log.i(TAG, "Permisos concedidos, escanear");
+        }
+
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         wifiBroadcastReceiver = new WiFiBroadcastReceiver();
         registerReceiver(wifiBroadcastReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+
+        if (wifiManager.isWifiEnabled() == false) {
+            Toast.makeText(this, "Encendidiendo WiFi", Toast.LENGTH_SHORT).show();
+            wifiManager.setWifiEnabled(true);
+        }
 
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
         if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             Log.i(TAG, "GPS habilitado");
-            Toast.makeText(this, "GPS is Enabled in your devide", Toast.LENGTH_SHORT).show();
         }
         else {
             Log.i(TAG, "GPS deshabilitado");
@@ -89,12 +129,11 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
             LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
                     .addLocationRequest(locationRequest);
 
-            // ******************************************************
             builder.setAlwaysShow(true); //this is the key ingredient
-
 
             PendingResult<LocationSettingsResult> result =
                     LocationServices.SettingsApi.checkLocationSettings(googleApiClient, builder.build());
+
             result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
                 @Override
                 public void onResult(LocationSettingsResult result) {
@@ -105,6 +144,8 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                             // All location settings are satisfied. The client can initialize location
                             // requests here.
                             Log.i(TAG, "All location settings are satisfied");
+                            networks.clear();
+                            wifiManager.startScan();
                             break;
                         case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
                             // Location settings are not satisfied. But could be fixed by showing the user
@@ -128,53 +169,58 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                     }
                 }
             });
-
-
         }
 
-
-        List<String> permissionsList = new ArrayList<String>();
-
-//        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-//            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_CONTACTS},
-//                        REQUEST_ACCESS_WIFI_STATE);
-//        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            Log.i(TAG, "ACCESS_WIFI_STATE");
-            permissionsList.add(Manifest.permission.ACCESS_WIFI_STATE);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.i(TAG, "ACCESS_FINE_LOCATION");
-            permissionsList.add(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            Log.i(TAG, "CHANGE_WIFI_STATE");
-            permissionsList.add(Manifest.permission.CHANGE_WIFI_STATE);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.i(TAG, "ACCESS_COARSE_LOCATION");
-            permissionsList.add(Manifest.permission.ACCESS_COARSE_LOCATION);
-        }
-        Log.i(TAG, "size: " + permissionsList.size());
-        if (permissionsList.size() > 0) {
-            ActivityCompat.requestPermissions(this, permissionsList.toArray(new String[permissionsList.size()]),
-                    REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS);
-        } else {
-            Log.i(TAG, "Permisos concedidos, escanear");
-        }
-
-
-        if (wifiManager.isWifiEnabled() == false) {
-            Toast.makeText(this, "Encendidiendo WiFi", Toast.LENGTH_SHORT).show();
-            wifiManager.setWifiEnabled(true);
-        }
-
-        wifiManager.setWifiEnabled(true);
+        networks.clear();
         wifiManager.startScan();
-        Toast.makeText(DisplaySSIDActivity.this, "Iniciando búsqueda...", Toast.LENGTH_SHORT).show();
+        Log.i(TAG, "Iniciando búsqueda en onCreate");
     }
 
+    @Override
+    public void onClick(View view) {
+        int id = view.getId();
+        if(id == R.id.imgRescan){
+            Toast.makeText(this, getText(R.string.scanning), Toast.LENGTH_SHORT).show();
+            networks.clear();
+            wifiManager.startScan();
+        }
+    }
+
+    class WiFiBroadcastReceiver extends BroadcastReceiver {
+        public void onReceive(Context c, Intent intent) {
+            Log.d(TAG, "Recibido...");
+            List<ScanResult> wifiList = wifiManager.getScanResults();
+
+            // Poblar el array de POJOS wifiNetwork a partir de resultados de búsqueda de WiFi
+            for (ScanResult wifiListItem : wifiList){
+                WiFiNetwork wiFiNetwork = new WiFiNetwork();
+                wiFiNetwork.setSsid(wifiListItem.SSID);
+
+                if(!networks.contains(wiFiNetwork)) {
+                    networks.add(wiFiNetwork);
+                    Log.i(TAG, wifiListItem.SSID);
+                }
+
+                // Instanciar adaptador
+                wiFiNetworkAdapter = new WiFiNetworkAdapter(DisplaySSIDActivity.this,
+                        R.layout.wifi_network_layout,
+                        networks.toArray(new WiFiNetwork[networks.size()]));
+//        Log.d(TAG,"test: " + String.valueOf(adapterFoundDevices.areAllItemsEnabled()));
+                // Asignar adaptador
+                Log.d(TAG, networks.toString());
+                lstSsid.setAdapter(wiFiNetworkAdapter);
+            }
+
+        }
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Revisar constantemente que GSP esté encendido??
+    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -186,9 +232,9 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                     // permission was granted, yay! Do the
                     Log.d(TAG, "Permisos concedidos");
                     wifiManager.startScan();
-                    Toast.makeText(DisplaySSIDActivity.this, "Iniciando búsqueda...", Toast.LENGTH_SHORT).show();
-
-                } else {
+                    Log.i(TAG, "Iniciando búsqueda en onRequestPermissionsResult");
+                }
+                else {
                     Log.d(TAG, "Permisos NO concedidos");
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
@@ -216,17 +262,7 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
     }
 
 
-    class WiFiBroadcastReceiver extends BroadcastReceiver {
-        public void onReceive(Context c, Intent intent) {
-            Log.d(TAG, "Recibido...");
-            ArrayList<String> connections = new ArrayList<String>();
-            ArrayList<Float> Signal_Strenth = new ArrayList<Float>();
 
-            List<ScanResult> wifiList = wifiManager.getScanResults();
-
-            Log.i(TAG, wifiList.toString());
-        }
-    }
 
 
 }

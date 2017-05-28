@@ -29,7 +29,6 @@ int temperature;
 int humidity;
 
 
-
 void setup(void){
   Serial.begin(9600);
   EEPROM.begin(512);
