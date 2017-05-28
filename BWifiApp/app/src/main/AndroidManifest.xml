@@ -4,27 +4,35 @@
 
     <!-- Dangerous permissions -->
 
-    <!-- If the device is running Android 6.0 (API level 23) or higher, and the app's
-         targetSdkVersion is 23 or higher, the app requests permissions from the user at run-time -->
 
-    <!-- If the device is running Android 5.1 (API level 22) or lower, or the app's targetSdkVersion
-         is 22 or lower, the system asks the user to grant the permissions when the user installs the app -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--
+         If the device is running Android 6.0 (API level 23) or higher, and the app's
+         targetSdkVersion is 23 or higher, the app requests permissions from the user at run-time
+    -->
 
+
+    <!--
+         If the device is running Android 5.1 (API level 22) or lower, or the app's targetSdkVersion
+         is 22 or lower, the system asks the user to grant the permissions when the user installs the app
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 
     <!-- Normal permissions -->
 
-    <!-- If your app lists normal permissions in its manifest (that is, permissions
-         that don't pose much risk to the user's privacy or the device's operation),
-         the system automatically grants those permissions -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
-    <uses-feature android:name="android.hardware.location.gps" />
-    <uses-feature android:name="android.hardware.wifi" />
+    <!--
+         If your app lists normal permissions in its manifest (that is, permissions
+         that don't pose much risk to the user's privacy or the device's operation),
+         the system automatically grants those permissions
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+
+    <uses-feature android:name="android.hardware.location.gps"/>
+    <uses-feature android:name="android.hardware.wifi"/>
 
     <application
         android:allowBackup="true"
@@ -34,14 +42,15 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity android:name=".activity.MainActivity">
-
         </activity>
-        <activity android:name=".activity.DisplaySSIDActivity">
+        <activity android:name=".activity.WizardAPConnectionActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
+        <activity android:name=".activity.WizardNewConnectionActivity">
         </activity>
     </application>
 

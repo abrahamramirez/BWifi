@@ -1,28 +1,47 @@
 package novellius.com.boylerwifi.activity;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
-import android.location.Location;
+import android.graphics.Color;
+import android.graphics.Point;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.location.LocationManager;
+import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
+import android.view.Display;
+import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewGroupOverlay;
+import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
+import android.widget.PopupWindow;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -30,7 +49,6 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
@@ -45,39 +63,60 @@ import novellius.com.boylerwifi.R;
 import novellius.com.boylerwifi.adapter.WiFiNetwork;
 import novellius.com.boylerwifi.adapter.WiFiNetworkAdapter;
 
-public class DisplaySSIDActivity extends AppCompatActivity implements
+public class WizardAPConnectionActivity extends AppCompatActivity implements
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener,
-        View.OnClickListener{
+        View.OnClickListener,
+        AdapterView.OnItemClickListener{
 
 
     private static final String TAG = "****** DisplaySSIDAct ";
     private static final int REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS = 777;
+    private static final int WEP = 0;
+    private static final int WPA = 1;
+    private static final int OPEN = 2;
 
     private List<WiFiNetwork> networks = new ArrayList<WiFiNetwork>();
     private WifiManager wifiManager;
+    private WifiConfiguration wifiConfiguration;
     private WiFiBroadcastReceiver wifiBroadcastReceiver;
     private LocationManager locationManager;
     private LocationRequest locationRequest;
     private LocationSettingsRequest locationSettingsRequest;
     private GoogleApiClient googleApiClient;
     private WiFiNetworkAdapter wiFiNetworkAdapter;
+    private PopupWindow popupWindow;
+    private View popupView;
+    private LayoutInflater layoutInflater;
+    private String ssid;
+    private ViewGroup root;
 
     // Elementos de la UI
     private ListView lstSsid;
     private ImageButton imgRescan;
 
+
+    // Elementos de la ventana PopUp
+    private TextView lblSsidToConnect;
+    private EditText txtPassword;
+    private CheckBox chkShowPassword;
+    private Button btnConnect;
+    private Button btnCancel;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_display_ssid);
+        setContentView(R.layout.activity_wizard_ap_connection);
 
         // Inicializar instancias
         List<String> permissionsList = new ArrayList<String>();
-
+        root = (ViewGroup) getWindow().getDecorView().getRootView();
+        wifiConfiguration = new WifiConfiguration();
 
         // Inicializar elementos de la UI
         lstSsid = (ListView) findViewById(R.id.lstSsid);
+        lstSsid.setOnItemClickListener(this);
         imgRescan = (ImageButton) findViewById(R.id.imgRescan);
         imgRescan.setOnClickListener(this);
 
@@ -116,7 +155,7 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
         else {
             Log.i(TAG, "GPS deshabilitado");
 
-            googleApiClient = new GoogleApiClient.Builder(DisplaySSIDActivity.this)
+            googleApiClient = new GoogleApiClient.Builder(WizardAPConnectionActivity.this)
                     .addApi(LocationServices.API)
                     .addConnectionCallbacks(this)
                     .addOnConnectionFailedListener(this).build();
@@ -155,7 +194,7 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                                 // Show the dialog by calling startResolutionForResult(),
                                 // and check the result in onActivityResult().
                                 status.startResolutionForResult(
-                                        DisplaySSIDActivity.this, 1000);
+                                        WizardAPConnectionActivity.this, 1000);
                             }
                             catch (IntentSender.SendIntentException e) {
                                 // Ignore the error.
@@ -184,13 +223,84 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
             networks.clear();
             wifiManager.startScan();
         }
+        if(id == R.id.btnCancel){
+            popupWindow.dismiss();
+        }
+        if(id == R.id.btnConnect){
+
+            connectToSelectedNetwork(lblSsidToConnect.getText().toString(), txtPassword.getText().toString(), WPA);
+
+
+        }
     }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    @Override
+    public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+        WiFiNetwork wiFiNetwork = null;
+        if(adapterView.getAdapter().equals(wiFiNetworkAdapter)){        // Verificar que elemento fue seleccionado
+            wiFiNetwork = (WiFiNetwork) wiFiNetworkAdapter.getItem(i);
+
+            // Obtener dimensiones del dipositivo
+            Display display = getWindowManager().getDefaultDisplay();
+            Point size = new Point();
+            display.getSize(size);
+            int height = size.y;                            // Obtener altura del dispositivo
+            int width = size.x;                             // Obtener largo del dispositivo
+
+            // Inflar ventana popup
+            layoutInflater = (LayoutInflater)getBaseContext().getSystemService(LAYOUT_INFLATER_SERVICE);
+            popupView = layoutInflater.inflate(R.layout.input_password_layout, null, false);
+
+            // Inicializar PopUp Window
+            popupWindow = new PopupWindow(popupView, (int)(width * 0.90), (int)(height * 0.45));
+//            popupWindow = new PopupWindow(popupView);
+
+            // Configuraciones adicionales de la ventana popup
+            popupWindow.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+            popupWindow.setFocusable(true);
+            popupWindow.setOutsideTouchable(false);
+            popupWindow.setElevation(30);
+            popupWindow.setAnimationStyle(android.R.style.Animation_Dialog);
+
+            // Inicializar elementos de la ventana PopUp
+            lblSsidToConnect = (TextView) popupView.findViewById(R.id.lblSsidToConnect);
+            txtPassword = (EditText) popupView.findViewById(R.id.txtPassword);
+            chkShowPassword = (CheckBox) popupView.findViewById(R.id.chkShowPassword);
+            btnConnect = (Button) popupView.findViewById(R.id.btnConnect);
+            btnCancel = (Button) popupView.findViewById(R.id.btnCancel);
+
+            btnConnect.setOnClickListener(this);
+            btnCancel.setOnClickListener(this);
+
+            chkShowPassword.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                    if(b){
+                        txtPassword.setTransformationMethod(null);
+                        txtPassword.setSelection(txtPassword.getText().length());
+                    }
+                    else{
+                        txtPassword.setTransformationMethod(new PasswordTransformationMethod());
+                        txtPassword.setSelection(txtPassword.getText().length());
+                    }
+                }
+            });
+            lblSsidToConnect.setText(wiFiNetwork.getSsid());
+            // Mostrar ventana popup
+            popupWindow.showAtLocation(popupView, Gravity.CENTER, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+//            applyDim(root, 0.5f);
+        }
+    }
+
+
+
 
     class WiFiBroadcastReceiver extends BroadcastReceiver {
         public void onReceive(Context c, Intent intent) {
             Log.d(TAG, "Recibido...");
             List<ScanResult> wifiList = wifiManager.getScanResults();
-
+            networks.clear();
             // Poblar el array de POJOS wifiNetwork a partir de resultados de búsqueda de WiFi
             for (ScanResult wifiListItem : wifiList){
                 WiFiNetwork wiFiNetwork = new WiFiNetwork();
@@ -202,7 +312,7 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                 }
 
                 // Instanciar adaptador
-                wiFiNetworkAdapter = new WiFiNetworkAdapter(DisplaySSIDActivity.this,
+                wiFiNetworkAdapter = new WiFiNetworkAdapter(WizardAPConnectionActivity.this,
                         R.layout.wifi_network_layout,
                         networks.toArray(new WiFiNetwork[networks.size()]));
 //        Log.d(TAG,"test: " + String.valueOf(adapterFoundDevices.areAllItemsEnabled()));
@@ -213,6 +323,8 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
 
         }
     }
+
+
 
 
     @Override
@@ -231,6 +343,7 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // permission was granted, yay! Do the
                     Log.d(TAG, "Permisos concedidos");
+                    networks.clear();
                     wifiManager.startScan();
                     Log.i(TAG, "Iniciando búsqueda en onRequestPermissionsResult");
                 }
@@ -262,7 +375,108 @@ public class DisplaySSIDActivity extends AppCompatActivity implements
     }
 
 
+    /**
+     * Function to disconnect from the currently connected WiFi AP.
+     * @return true  if disconnection succeeded
+     * 				 false if disconnection failed
+     */
+    public boolean disconnectFromWifi() {
+        return (wifiManager.disconnect());
+    }
 
+
+    /**
+     * Function to connect to a selected network
+     * @param networkSSID         network SSID name
+     * @param networkPassword     network password
+     * @param networkId           network ID from WifiManager
+     * @param securityProtocol    network security protocol
+     * @return true  if connection to selected network succeeded
+     * 				 false if connection to selected network failed
+     */
+    public boolean connectToSelectedNetwork(String networkSSID, String networkPassword, int securityProtocol) {
+        // Clear wifi configuration variable
+//        clearWifiConfig();
+        int networkId;
+        // Sets network SSID name on wifiConf
+        wifiConfiguration.SSID = "\"" + networkSSID + "\"";
+        Log.d(TAG, "SSID Received: " + wifiConfiguration.SSID);
+
+        switch (securityProtocol) {
+            // WEP "security".
+            case WEP:
+                wifiConfiguration.wepKeys[0] = "\"" + networkPassword + "\"";
+                wifiConfiguration.wepTxKeyIndex = 0;
+                wifiConfiguration.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+                wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
+                break;
+
+            // WAP security. We have to set preSharedKey.
+            case WPA:
+                wifiConfiguration.preSharedKey = "\"" + networkPassword + "\"";
+                break;
+
+            // Network without security.
+            case OPEN:
+                wifiConfiguration.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+                break;
+        }
+
+        // Add WiFi configuration to list of recognizable networks
+        if ((networkId = wifiManager.addNetwork(wifiConfiguration)) == -1) {
+            Log.d(TAG, "Failed to add network configuration!");
+            return false;
+        }
+
+        // Disconnect from current WiFi connection
+        if (!disconnectFromWifi()) {
+            Log.d(TAG, "Failed to disconnect from network!");
+            return false;
+        }
+
+        // Enable network to be connected
+        if (!wifiManager.enableNetwork(networkId, true)) {
+            Log.d(TAG, "Failed to enable network!");
+            return false;
+        }
+
+        // Connect to network
+        if (!wifiManager.reconnect()) {
+            Log.d(TAG, "Failed to connect!");
+            return false;
+        }
+        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.FAILED) {
+            Log.d(TAG, "Login failed!");
+            return false;
+        }
+        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.SUSPENDED) {
+            Log.d(TAG, "Connection suspended!");
+            return false;
+        }
+        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.BLOCKED) {
+            Log.d(TAG, "Connection blocked!");
+            return false;
+        }
+
+        Log.d(TAG, "Conectado exitosamente...");
+        return true;
+    }
+
+
+    public static void applyDim(@NonNull ViewGroup parent, float dimAmount){
+        Drawable dim = new ColorDrawable(Color.BLACK);
+        dim.setBounds(0, 0, parent.getWidth(), parent.getHeight());
+        dim.setAlpha((int) (255 * dimAmount));
+
+        ViewGroupOverlay overlay = parent.getOverlay();
+        overlay.add(dim);
+    }
+
+    public static void clearDim(@NonNull ViewGroup parent) {
+        ViewGroupOverlay overlay = parent.getOverlay();
+        overlay.clear();
+    }
 
 
 }

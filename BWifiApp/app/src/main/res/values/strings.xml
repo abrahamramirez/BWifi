@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">BoylerWifi</string>
     <string name="scanning">Buscando redes...</string>
+    <string name="connect">Conectar</string>
+    <string name="show_password">Mostrar contraseña</string>
+    <string name="password">Contraseña</string>
+    <string name="cancel">Cancelar</string>
 </resources>
