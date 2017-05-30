@@ -14,9 +14,11 @@ import android.graphics.drawable.Drawable;
 import android.location.LocationManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
+import android.net.wifi.SupplicantState;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -56,12 +58,16 @@ import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStates;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 
+import org.w3c.dom.Text;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import novellius.com.boylerwifi.R;
-import novellius.com.boylerwifi.adapter.WiFiNetwork;
+import novellius.com.boylerwifi.adapter.Network;
 import novellius.com.boylerwifi.adapter.WiFiNetworkAdapter;
+import novellius.com.boylerwifi.util.ConnectToWifi;
 
 public class WizardAPConnectionActivity extends AppCompatActivity implements
         GoogleApiClient.ConnectionCallbacks,
@@ -76,7 +82,8 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
     private static final int WPA = 1;
     private static final int OPEN = 2;
 
-    private List<WiFiNetwork> networks = new ArrayList<WiFiNetwork>();
+    private List<Network> networks = new ArrayList<Network>();
+    private List<String> ssidList = new ArrayList<String>();
     private WifiManager wifiManager;
     private WifiConfiguration wifiConfiguration;
     private WiFiBroadcastReceiver wifiBroadcastReceiver;
@@ -90,8 +97,10 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
     private LayoutInflater layoutInflater;
     private String ssid;
     private ViewGroup root;
+    private Network network;
 
     // Elementos de la UI
+    private TextView lblStatus;
     private ListView lstSsid;
     private ImageButton imgRescan;
 
@@ -115,6 +124,7 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
         wifiConfiguration = new WifiConfiguration();
 
         // Inicializar elementos de la UI
+        lblStatus = (TextView) findViewById(R.id.lblStatus);
         lstSsid = (ListView) findViewById(R.id.lstSsid);
         lstSsid.setOnItemClickListener(this);
         imgRescan = (ImageButton) findViewById(R.id.imgRescan);
@@ -210,9 +220,13 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
             });
         }
 
-        networks.clear();
         wifiManager.startScan();
         Log.i(TAG, "Iniciando búsqueda en onCreate");
+
+        List<WifiConfiguration> wifiConfigurations = wifiManager.getConfiguredNetworks();
+        for (WifiConfiguration wifiConfiguration : wifiConfigurations) {
+            Log.d(TAG, "preconfigured: " + wifiConfiguration.SSID);
+        }
     }
 
     @Override
@@ -220,26 +234,36 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
         int id = view.getId();
         if(id == R.id.imgRescan){
             Toast.makeText(this, getText(R.string.scanning), Toast.LENGTH_SHORT).show();
-            networks.clear();
             wifiManager.startScan();
         }
         if(id == R.id.btnCancel){
             popupWindow.dismiss();
         }
         if(id == R.id.btnConnect){
-
-            connectToSelectedNetwork(lblSsidToConnect.getText().toString(), txtPassword.getText().toString(), WPA);
-
-
+//            new MakeRequest().execute("http://192.168.4.1/read?params=0");
+            network.setPassword(txtPassword.getText().toString());
+            try {
+                if(new ConnectToWifi(wifiConfiguration, wifiManager)
+                        .execute(network).get()){
+                    Toast.makeText(this, getString(R.string.connection_successful), Toast.LENGTH_SHORT).show();
+                }
+                else{
+                    Toast.makeText(this, getString(R.string.error_credentials), Toast.LENGTH_SHORT).show();
+                }
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-        WiFiNetwork wiFiNetwork = null;
+        String ssid = null;
         if(adapterView.getAdapter().equals(wiFiNetworkAdapter)){        // Verificar que elemento fue seleccionado
-            wiFiNetwork = (WiFiNetwork) wiFiNetworkAdapter.getItem(i);
+            network = (Network) wiFiNetworkAdapter.getItem(i);
+//            ssid = ssidList.get(i);
 
             // Obtener dimensiones del dipositivo
             Display display = getWindowManager().getDefaultDisplay();
@@ -286,7 +310,8 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
                     }
                 }
             });
-            lblSsidToConnect.setText(wiFiNetwork.getSsid());
+            lblSsidToConnect.setText(network.getSsid());
+
             // Mostrar ventana popup
             popupWindow.showAtLocation(popupView, Gravity.CENTER, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 //            applyDim(root, 0.5f);
@@ -296,31 +321,25 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
 
 
 
-    class WiFiBroadcastReceiver extends BroadcastReceiver {
+
+    private class WiFiBroadcastReceiver extends BroadcastReceiver {
         public void onReceive(Context c, Intent intent) {
             Log.d(TAG, "Recibido...");
-            List<ScanResult> wifiList = wifiManager.getScanResults();
+            List<ScanResult> scanResults = wifiManager.getScanResults();
             networks.clear();
-            // Poblar el array de POJOS wifiNetwork a partir de resultados de búsqueda de WiFi
-            for (ScanResult wifiListItem : wifiList){
-                WiFiNetwork wiFiNetwork = new WiFiNetwork();
-                wiFiNetwork.setSsid(wifiListItem.SSID);
+            // Poblar el array de POJOS network a partir de resultados de búsqueda de WiFi
+            for (ScanResult scanResult : scanResults){
 
-                if(!networks.contains(wiFiNetwork)) {
-                    networks.add(wiFiNetwork);
-                    Log.i(TAG, wifiListItem.SSID);
+                Network network = new Network(scanResult.SSID, scanResult.capabilities);
+                if(!networks.contains(network)){
+                    networks.add(network);
                 }
 
-                // Instanciar adaptador
                 wiFiNetworkAdapter = new WiFiNetworkAdapter(WizardAPConnectionActivity.this,
                         R.layout.wifi_network_layout,
-                        networks.toArray(new WiFiNetwork[networks.size()]));
-//        Log.d(TAG,"test: " + String.valueOf(adapterFoundDevices.areAllItemsEnabled()));
-                // Asignar adaptador
-                Log.d(TAG, networks.toString());
+                        networks.toArray(new Network[networks.size()]));
                 lstSsid.setAdapter(wiFiNetworkAdapter);
             }
-
         }
     }
 
@@ -343,7 +362,6 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // permission was granted, yay! Do the
                     Log.d(TAG, "Permisos concedidos");
-                    networks.clear();
                     wifiManager.startScan();
                     Log.i(TAG, "Iniciando búsqueda en onRequestPermissionsResult");
                 }
@@ -375,93 +393,75 @@ public class WizardAPConnectionActivity extends AppCompatActivity implements
     }
 
 
-    /**
-     * Function to disconnect from the currently connected WiFi AP.
-     * @return true  if disconnection succeeded
-     * 				 false if disconnection failed
-     */
-    public boolean disconnectFromWifi() {
-        return (wifiManager.disconnect());
+
+    private class ConnectToWifiTask extends AsyncTask<String, Void, Boolean>{
+        String ssid = null;
+        String password = null;
+
+        @Override
+        protected void onPostExecute(Boolean aBoolean) {
+            super.onPostExecute(aBoolean);
+        }
+
+        @Override
+        protected Boolean doInBackground(String... credentials) {
+            ssid = credentials[0];
+            password = credentials[1];
+
+            wifiConfiguration.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+            wifiConfiguration.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+            wifiConfiguration.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+            wifiConfiguration.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+            wifiConfiguration.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+            wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
+            wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP104);
+            wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+            wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
+
+            wifiConfiguration.SSID = "\"" + ssid + "\"";
+            wifiConfiguration.preSharedKey = "\"" + password + "\"";
+
+            Log.d(TAG, "Connecting...");
+
+            wifiManager.addNetwork(wifiConfiguration);
+
+            List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
+            for( WifiConfiguration i : list ) {
+                if(i.SSID != null && i.SSID.equals("\"" + ssid + "\"")) {
+                    wifiManager.disconnect();
+                    wifiManager.enableNetwork(i.networkId, true);
+                    wifiManager.reconnect();
+
+                    break;
+                }
+            }
+            try {
+                Thread.sleep(5000);
+            }
+            catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+            if (wifiInfo.getSupplicantState() == SupplicantState.COMPLETED) {
+                String connectedSsid = wifiInfo.getSSID();
+                Log.d(TAG, "SSID connected: " + connectedSsid);
+                Log.d(TAG, "SSID to connect: " + ssid);
+                if(connectedSsid.equals("\"" + ssid + "\"")){
+                    Log.d(TAG, "Connection OK!");
+                    return true;
+                }
+                else{
+                    Log.d(TAG, "Connection Error!");
+                    return false;
+                }
+            }
+            else{
+                Log.d(TAG, "Connection Error 2!");
+                return false;
+            }
+        }
     }
 
-
-    /**
-     * Function to connect to a selected network
-     * @param networkSSID         network SSID name
-     * @param networkPassword     network password
-     * @param networkId           network ID from WifiManager
-     * @param securityProtocol    network security protocol
-     * @return true  if connection to selected network succeeded
-     * 				 false if connection to selected network failed
-     */
-    public boolean connectToSelectedNetwork(String networkSSID, String networkPassword, int securityProtocol) {
-        // Clear wifi configuration variable
-//        clearWifiConfig();
-        int networkId;
-        // Sets network SSID name on wifiConf
-        wifiConfiguration.SSID = "\"" + networkSSID + "\"";
-        Log.d(TAG, "SSID Received: " + wifiConfiguration.SSID);
-
-        switch (securityProtocol) {
-            // WEP "security".
-            case WEP:
-                wifiConfiguration.wepKeys[0] = "\"" + networkPassword + "\"";
-                wifiConfiguration.wepTxKeyIndex = 0;
-                wifiConfiguration.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-                wifiConfiguration.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
-                break;
-
-            // WAP security. We have to set preSharedKey.
-            case WPA:
-                wifiConfiguration.preSharedKey = "\"" + networkPassword + "\"";
-                break;
-
-            // Network without security.
-            case OPEN:
-                wifiConfiguration.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-                break;
-        }
-
-        // Add WiFi configuration to list of recognizable networks
-        if ((networkId = wifiManager.addNetwork(wifiConfiguration)) == -1) {
-            Log.d(TAG, "Failed to add network configuration!");
-            return false;
-        }
-
-        // Disconnect from current WiFi connection
-        if (!disconnectFromWifi()) {
-            Log.d(TAG, "Failed to disconnect from network!");
-            return false;
-        }
-
-        // Enable network to be connected
-        if (!wifiManager.enableNetwork(networkId, true)) {
-            Log.d(TAG, "Failed to enable network!");
-            return false;
-        }
-
-        // Connect to network
-        if (!wifiManager.reconnect()) {
-            Log.d(TAG, "Failed to connect!");
-            return false;
-        }
-        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.FAILED) {
-            Log.d(TAG, "Login failed!");
-            return false;
-        }
-        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.SUSPENDED) {
-            Log.d(TAG, "Connection suspended!");
-            return false;
-        }
-        if (WifiInfo.getDetailedStateOf(wifiInfo.getSupplicantState()) == NetworkInfo.DetailedState.BLOCKED) {
-            Log.d(TAG, "Connection blocked!");
-            return false;
-        }
-
-        Log.d(TAG, "Conectado exitosamente...");
-        return true;
-    }
 
 
     public static void applyDim(@NonNull ViewGroup parent, float dimAmount){

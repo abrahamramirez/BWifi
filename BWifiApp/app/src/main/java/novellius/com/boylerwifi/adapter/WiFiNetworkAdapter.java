@@ -22,18 +22,30 @@ public class WiFiNetworkAdapter extends ArrayAdapter{
 
     private Context context;
     private int resourceId;
-    private WiFiNetwork[] networks;
+    private Network[] networks;
+    private String[] ssidArray;
 
 
     public WiFiNetworkAdapter(@NonNull Context context,
                               @LayoutRes int resourceId,
-                              @NonNull WiFiNetwork[] networks) {
+                              @NonNull Network[] networks) {
 
         super(context, resourceId, networks);
         this.context = context;
         this.resourceId = resourceId;
         this.networks = networks;
     }
+
+
+//    public WiFiNetworkAdapter(@NonNull Context context,
+//                              @LayoutRes int resourceId,
+//                              @NonNull String[] ssidArray) {
+//
+//        super(context, resourceId, ssidArray);
+//        this.context = context;
+//        this.resourceId = resourceId;
+//        this.ssidArray = ssidArray;
+//    }
 
 
     @NonNull
@@ -47,6 +59,7 @@ public class WiFiNetworkAdapter extends ArrayAdapter{
         ImageView imgWiFiIcon = (ImageView) view.findViewById(R.id.imgWiFiIcon);
 
         lblWiFiSsid.setText(networks[position].getSsid());
+//        lblWiFiSsid.setText(ssidArray[position]);
 
         return view;
     }

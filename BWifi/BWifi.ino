@@ -13,6 +13,10 @@
 #define LISTEN_PORT  80                     // The port to listen for incoming TCP connections
 aREST rest = aREST();                       // Create aREST instance
 
+IPAddress staticIp (192,168,1,250);
+IPAddress gatewayIp (192,168,1,254);
+IPAddress subnetMaskIp (255,255,255,0);
+
 const char* ssidAp = "BoylerWifi";          // SSID a mostrar en modo AP
 const char* passwordAp = "pepsiman11";      // password para entrar a red en modo AP
 String sSsid = "";
@@ -44,6 +48,7 @@ void setup(void){
   rest.function("read",readData);
   rest.function("save",saveData);
   rest.function("reset", resetMcu);
+  rest.function("ip", isConnected);
   rest.set_id("1");
   rest.set_name("esp8266");
   
@@ -73,6 +78,7 @@ void setup(void){
 
     // Intentar conectar a red WiFi hasta agotar tiempo de espera
     WiFi.mode(WIFI_STA);
+    WiFi.config(staticIp, gatewayIp, subnetMaskIp);
     WiFi.begin(sSsid.c_str(), sPassword.c_str());
     timeout = 0;
     while (WiFi.status() != WL_CONNECTED){
@@ -162,6 +168,14 @@ int readData(String command) {
 int resetMcu(String command) {  
   setup();
   return 2;
+}
+
+int isConnected(String command) {  
+  String ip = WiFi.localIP().toString();
+  if(ip.equals("192.168.1.250")){
+    return 1;
+  }
+  return 0;
 }
 
 

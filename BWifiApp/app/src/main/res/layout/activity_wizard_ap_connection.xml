@@ -8,28 +8,39 @@
     tools:context="novellius.com.boylerwifi.activity.WizardAPConnectionActivity">
 
 
+    <ImageButton
+        android:id="@+id/imgRescan"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginRight="32dp"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/lstSsid"
+        app:srcCompat="?android:attr/actionModeCloseDrawable"/>
+
+    <TextView
+        android:id="@+id/lblStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Selecciona la red BoylerWifi"
+        android:textAppearance="@style/TextAppearance.AppCompat.Headline"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginTop="24dp"
+        android:layout_marginLeft="16dp"
+        app:layout_constraintLeft_toLeftOf="parent"/>
+
     <ListView
         android:id="@+id/lstSsid"
         android:layout_width="wrap_content"
         android:layout_height="250dp"
         android:layout_marginLeft="16dp"
         android:layout_marginRight="32dp"
-        android:layout_marginTop="8dp"
-        app:layout_constraintHorizontal_bias="0.479"
+        android:layout_marginTop="24dp"
+        app:layout_constraintHorizontal_bias="0.333"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
-
-    <ImageButton
-        android:id="@+id/imgRescan"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:srcCompat="@mipmap/ic_launcher"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:layout_marginTop="0dp"
-        app:layout_constraintTop_toBottomOf="@+id/lstSsid"
-        android:layout_marginRight="32dp"
-        app:layout_constraintRight_toRightOf="parent"/>
+        app:layout_constraintTop_toBottomOf="@+id/lblStatus"/>
 
 
 </android.support.constraint.ConstraintLayout>

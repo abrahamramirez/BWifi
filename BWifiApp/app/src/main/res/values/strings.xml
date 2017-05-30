@@ -5,4 +5,7 @@
     <string name="show_password">Mostrar contraseña</string>
     <string name="password">Contraseña</string>
     <string name="cancel">Cancelar</string>
+    <string name="error_credentials">Verifica la contraseña</string>
+    <string name="input_password_from_tag">Captura la contraseña que se encuentra en la equiqueta</string>
+    <string name="connection_successful">Conxeión exitosa</string>
 </resources>
