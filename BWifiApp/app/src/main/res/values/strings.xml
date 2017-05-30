@@ -8,4 +8,5 @@
     <string name="error_credentials">Verifica la contraseña</string>
     <string name="input_password_from_tag">Captura la contraseña que se encuentra en la equiqueta</string>
     <string name="connection_successful">Conxeión exitosa</string>
+    <string name="connecting">Conectando...</string>
 </resources>

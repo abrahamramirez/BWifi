@@ -34,7 +34,7 @@
         android:theme="@style/AppTheme">
         <activity android:name=".activity.MainActivity">
         </activity>
-        <activity android:name=".activity.WizardAPConnectionActivity">
+        <activity android:name=".activity.APConnectionActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
@@ -42,7 +42,7 @@
             </intent-filter>
 
         </activity>
-        <activity android:name=".activity.WizardNewConnectionActivity">
+        <activity android:name=".activity.HomeConnectionActivity">
 
         </activity>
     </application>
